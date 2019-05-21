@@ -1,12 +1,12 @@
 ﻿---
+layout: 'n'
 title: JDK源码学习系列05----LinkedList
-tags: 
-    - Java 
-    - JDK源码 
-    - List 
-    - LinkedList 
-    - Collection
-
+date: 2017-12-10 12:26:47
+tags:
+    - Java
+    - LinkedList
+    - List
+    - JDK
 ---
 
 >`LinkedList`是基于双向链表实现的，它也可以被当作堆栈、队列或双端队列进行操作。

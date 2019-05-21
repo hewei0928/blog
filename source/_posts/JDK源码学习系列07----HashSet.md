@@ -1,4 +1,4 @@
-﻿---
+﻿﻿---
 title: JDK源码学习系列07----HashSet
 date: 2017-12-15 15:12:15
 tags:
@@ -31,7 +31,7 @@ private transient HashMap<E,Object> map;
 
 private static final Object PRESENT = new Object();
 ```
-从两个成员变量可看出，`HashSet`底层是由`HashMap`实现数据存储的。、`HashMap`中的key用于存储实际的数据，value则用`HashSet`内定义的一个"虚拟"的static final Object对象填充。
+从两个成员变量可看出，`HashSet`底层是由`HashMap`(实际是`HashMap`和`LinkedHashMap`)实现数据存储的。、`HashMap`中的key用于存储实际的数据，value则用`HashSet`内定义的一个"虚拟"的static final Object对象填充。
 
 ## 四. 构造函数
 ```java
@@ -55,7 +55,7 @@ public HashSet(Collection<? extends E> c) {
     addAll(c);
 }
 
-//底层使用LinkedHashMap实现
+//底层使用LinkedHashMap实现, LinkedHashMap中的accessOrder，表示数据读取的顺序只与插入顺序有关
 HashSet(int initialCapacity, float loadFactor, boolean dummy) {
     map = new LinkedHashMap<>(initialCapacity, loadFactor);
 }
@@ -63,40 +63,73 @@ HashSet(int initialCapacity, float loadFactor, boolean dummy) {
 
 ## 五. 成员方法
 
+### add()
 ```java
-public Iterator<E> iterator() {
-    return map.keySet().iterator();
-}
-
-public int size() {
-    return map.size();
-}
-
-public boolean isEmpty() {
-    return map.isEmpty();
-}
-
-public boolean contains(Object o) {
-    return map.containsKey(o);
-}
-
-
-//从此方法可知HashSet可以存储null值，但是不可重复，因为null的hashcode必然为0
 public boolean add(E e) {
     return map.put(e, PRESENT)==null;
 }
+```
+`HahsSet`的`add()`方法底层调用`HashMap.put`， 由`HashMap`源码可知：
 
-public boolean remove(Object o) {
-    return map.remove(o)==PRESENT;
-}
+- `key`值可以为`null`; 
+- `key`值唯一
+- 如果添加时`key`已存在（`oldKey == newKey` 或者 `oldKey.equals(newKey)`），`key`值不会被覆盖。
 
+由此与`HashSet`已知特性一一对应：
+
+- `HashSet`可以存储`null`值
+- `HashSet`中的元素不重复
+- `HashSet`添加重复元素时不会进行替换
+
+### clear()
+```java
 public void clear() {
     map.clear();
 }
 ```
-`HashSet`底层方法多采用了`HashMap`的方法具体见`HsahMap`的源码阅读博客吧。
+
+### contains()
+```
+// map中的containsKey 先根据key值去决定在数组中的存储下标，再遍历其中存储的链表去查找对应节点
+public boolean contains(Object o) {
+    return map.containsKey(o);
+}
+```
+
+### isEmpty()
+```java
+public boolean isEmpty() {
+    return map.isEmpty();
+}
+```
+
+### remove()
+```java
+// HashMap中根据key查找对应数组存储下标，再去其中的链表或树中查找并删除对应节点
+public boolean remove(Object o) {
+    return map.remove(o)==PRESENT;
+}
+```
+
+### size()
+```java
+//返回实际存储的数据数
+public int size() {
+    return map.size();
+}
+```
+
+### removeAll()、 addAll()、 containsAll()
+这几个方法实现在`AbstractCollection`， 基本思想都是遍历然后调用`HashSet`中的`remove`、`add`、`contains`方法
+
+### iterator
+```java
+public Spliterator<E> spliterator() {
+    return new HashMap.KeySpliterator<E,Object>(map, 0, -1, 0, 0);
+}
+```
 
 ## 总结
 - `HashSet`底层由`HashMap`实现，数据存储在`HashMap`的key内。
-- `HashSet`可以存储null，但是会被覆盖。
+- `HashSet`可以存储null。
 - `HashSet`不是线程安全的。

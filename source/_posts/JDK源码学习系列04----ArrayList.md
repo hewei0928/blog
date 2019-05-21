@@ -1,14 +1,13 @@
 ﻿---
+layout: 'n'
 title: JDK源码学习系列04----ArrayList
-tags: 
-    - Java 
-    - JDK源码 
-    - List 
-    - ArrayList 
-    - Collection
-
+date: 2017-12-07 13:00:47
+tags:
+    - Java
+    - ArrayList
+    - List
+    - JDK
 ---
-
 >集合一直是java中的重点，今天开始慢慢学习它的源码。
 
 ## 一. ArrayList

@@ -3,7 +3,8 @@ title: JDK源码学习系列02----AbstractStringBuilder
 date: 2017-11-30 13:02:31
 tags: 
    - Java 
-   - JDK源码
+   - JDK
+   - String
 
 ---
 
@@ -12,33 +13,17 @@ tags:
 
 <!--more-->
 
-&ensp;&ensp;观察源码可以发现类中大量方法用到了`System.arraycopy()`方法:
-```java
-/**
-*   src:源数组;
-*   srcPos:源数组要复制的起始位置; 起始下标，包括
-*   dest:目的数组;
-*   destPos:目的数组放置的起始位置; 起始下标，包括
-*   length:复制的长度; 不包括下标length+start
-*/
-public static void arraycopy(Object src,
-                             int srcPos,
-                             Object dest,
-                             int destPos,
-                             int length)
-```
-
 ##方法汇总
 
-### 1. 成员变量
-&ensp;&ensp;`AbstractStringBuilder`和`String`一样，在其内部都是以字符数组的形式实现的。也就是`String,StringBuffer`以及`StringBuilder`在其内部都是以字符数组的形式实现的。
+### 成员变量
+&ensp;&ensp;`AbstractStringBuilder`和`String`一样，在其内部都是以字符数组的形式存储数据的。也就是`String`,`StringBuffer`以及`StringBuilder`在其内部都是以字符数组的形式存储的。
 
 ```java
 char value[]; //用于存储字符串
 int count; //表示字符串的实际长度
 ```
 
-### 2. 构造函数
+### 构造函数
 &ensp;&ensp;`AbstractStringBuilder`的构造函数中传入的`capacity`是指`char`数组容量，实际长度是以count表示的。
 ```java
 AbstractStringBuilder() {
@@ -49,10 +34,12 @@ AbstractStringBuilder(int capacity) {
 }
 ```
 
-### 3. 容量和长度
+### 成员方法
+
+#### 容量和长度
 ```java
 /**
-* 返回字符串长度
+* 返回字符串长度，即实际存储的字符数量
 */
 public int length() {
     return count;
@@ -66,27 +53,26 @@ public int capacity() {
 }
 ```
 
-### 4. `AbstractStringBuilder`的扩容
+#### `AbstractStringBuilder`的扩容
+
 ```java
 public void ensureCapacity(int minimumCapacity) {
     if (minimumCapacity > 0)
         ensureCapacityInternal(minimumCapacity);
 }
 
-    
 private void ensureCapacityInternal(int minimumCapacity) {
     // overflow-conscious code
     if (minimumCapacity - value.length > 0) {
-        //将char数组进行扩容，并将原数据赋值入新数组内
+        //将char数组进行扩容，并将原数据赋值入新数组内， 浅拷贝
         value = Arrays.copyOf(value,
                 newCapacity(minimumCapacity));
     }
 }
 
-    
-
 /**
-* 计算扩容的长度
+* 计算扩容的长度 
+* 不考虑数组长度超出int长的情况下， 数组长度变为value.length*2+2和minCapacity的较大值
 */
 private int newCapacity(int minCapacity) {
 
@@ -115,24 +101,25 @@ private int hugeCapacity(int minCapacity) {
 }
 ```
 
-### 5. 字符串减少存储空间
+#### 字符串减少存储空间
 ```java
 // 把数组长度削减到最小
 public void trimToSize() {
     if (count < value.length) {
+        //返回新数组，长度为count
         value = Arrays.copyOf(value, count);
     }
 }
 ```
 
-### 6. 字符数组设置新长度
+#### 字符数组设置新长度
 ```java
 public void setLength(int newLength) {
     if (newLength < 0)
         throw new StringIndexOutOfBoundsException(newLength);
     ensureCapacityInternal(newLength);
 
-    if (count < newLength) {//设置长度大于原来长度时，后面部分补以空白 
+    if (count < newLength) {//设置长度大于原来长度时，后面部分补以空白字符
         Arrays.fill(value, count, newLength, '\0');
     }
 
@@ -141,7 +128,7 @@ public void setLength(int newLength) {
 }
 ```
 
-### 7. `charAt()`
+#### 字符获取，设置
 ```java
 //根据下标获取对应字符
 public char charAt(int index) {
@@ -150,7 +137,24 @@ public char charAt(int index) {
     return value[index];
 }
 
-// 获取子串，把它拷贝到目标字符数组指定起始位置
+// 返回对应下标处的字符对应ASCII码
+public int codePointAt(int index) {
+    if ((index < 0) || (index >= count)) {
+        throw new StringIndexOutOfBoundsException(index);
+    }
+    return Character.codePointAtImpl(value, index, count);
+}
+
+// 返回对应下标前一个字符的ASCII码
+public int codePointBefore(int index) {
+    int i = index - 1;
+    if ((i < 0) || (i >= count)) {
+        throw new StringIndexOutOfBoundsException(index);
+    }
+    return Character.codePointBeforeImpl(value, index, 0);
+}
+
+// 获取子串，把它拷贝到目标字符数组指定起始位置 （不包括srcEnd下标）
 public void getChars(int srcBegin, int srcEnd, char[] dst, int dstBegin)
 {
     if (srcBegin < 0)
@@ -163,7 +167,7 @@ public void getChars(int srcBegin, int srcEnd, char[] dst, int dstBegin)
 }
 
 
-//字符数组中指定下标字符替换 index:[0~value)
+//字符数组中指定下标字符替换 index:[0~count]
 public void setCharAt(int index, char ch) {
     if ((index < 0) || (index >= count))
         throw new StringIndexOutOfBoundsException(index);
@@ -172,22 +176,30 @@ public void setCharAt(int index, char ch) {
 ```
 
 
-### 8. 比较重要的append方法
-
-各类`append`方法
+#### 比较常用的各类append方法
 
 ```java
 public AbstractStringBuilder append(Object obj) {
-    return append(String.valueOf(obj));//如果obj==null则返回"null"
+    return append(String.valueOf(obj));//如果obj==null则返回"null"， 否则调用obj.toString()方法
 }
 
 public AbstractStringBuilder append(String str) {
     if (str == null) //如果为空则添加"null"
         return appendNull();
     int len = str.length();
-    ensureCapacityInternal(count + len);//value数组扩容
+    ensureCapacityInternal(count + len);// count + len > 数组长则进行扩容
     str.getChars(0, len, value, count);//将str中的char数组添加至value数组末尾
     count += len;//改变字符串实际长度
+    return this;
+}
+
+public AbstractStringBuilder append(StringBuffer sb) {
+    if (sb == null)
+        return appendNull();
+    int len = sb.length();
+    ensureCapacityInternal(count + len);
+    sb.getChars(0, len, value, count);
+    count += len;
     return this;
 }
 
@@ -202,7 +214,6 @@ AbstractStringBuilder append(AbstractStringBuilder asb) {
     return this;
 }
 
-//感觉这个方法和AbstractStringBuilder类中其他方法的代码风格格格不入，换人了？
 // 末尾追加CharSequence引用指向的对象
 public AbstractStringBuilder append(CharSequence s) {
     if (s == null)
@@ -215,7 +226,7 @@ public AbstractStringBuilder append(CharSequence s) {
     return this.append(s, 0, s.length());//将charsequence添加至value尾部
 }
 
-
+// 将字符序列start(包括)到end(不包括)中的字符添加至末尾
 public AbstractStringBuilder append(CharSequence s, int start, int end) {
     if (s == null)
         s = "null";
@@ -240,7 +251,7 @@ public AbstractStringBuilder append(char[] str) {
     return this;
 }
 
-
+// 包括str的offset下标， 不包括offset+len下标
 public AbstractStringBuilder append(char str[], int offset, int len) {
     if (len > 0)                // let arraycopy report AIOOBE for len < 0
         ensureCapacityInternal(count + len);
@@ -248,8 +259,6 @@ public AbstractStringBuilder append(char str[], int offset, int len) {
     count += len;
     return this;
 }
-
-
 
 public AbstractStringBuilder append(boolean b) {
     if (b) {
@@ -269,25 +278,9 @@ public AbstractStringBuilder append(boolean b) {
     return this;
 }
 
-
 public AbstractStringBuilder append(char c) {
     ensureCapacityInternal(count + 1);
     value[count++] = c;
-    return this;
-}
-
-
-public AbstractStringBuilder append(int i) {
-    if (i == Integer.MIN_VALUE) {
-        append("-2147483648");
-        return this;
-    }
-    int appendedLength = (i < 0) ? Integer.stringSize(-i) + 1
-                                 : Integer.stringSize(i);
-    int spaceNeeded = count + appendedLength;
-    ensureCapacityInternal(spaceNeeded);
-    Integer.getChars(i, spaceNeeded, value);
-    count = spaceNeeded;
     return this;
 }
 
@@ -306,6 +299,29 @@ public AbstractStringBuilder append(int i) {
     return this;
 }
 
+public AbstractStringBuilder append(long l) {
+    if (l == Long.MIN_VALUE) {
+        append("-9223372036854775808");
+        return this;
+    }
+    int appendedLength = (l < 0) ? Long.stringSize(-l) + 1
+                                 : Long.stringSize(l);
+    int spaceNeeded = count + appendedLength;
+    ensureCapacityInternal(spaceNeeded);
+    Long.getChars(l, spaceNeeded, value);
+    count = spaceNeeded;
+    return this;
+}
+
+public AbstractStringBuilder append(float f) {
+    FloatingDecimal.appendTo(f,this);
+    return this;
+}
+
+public AbstractStringBuilder append(double d) {
+    FloatingDecimal.appendTo(d,this);
+    return this;
+}
 
 /**
 * append null
@@ -313,6 +329,7 @@ public AbstractStringBuilder append(int i) {
 private AbstractStringBuilder appendNull() {
     int c = count;
     ensureCapacityInternal(c + 4);
+    // 数组对象及变量在堆栈中的存储需加深了解
     final char[] value = this.value;
     value[c++] = 'n';
     value[c++] = 'u';
@@ -323,8 +340,7 @@ private AbstractStringBuilder appendNull() {
 }
 ```
 
-
-### 9. delete方法
+#### 字符删除 delete
 
 ```java
 /**
@@ -340,12 +356,12 @@ public AbstractStringBuilder delete(int start, int end) {
         throw new StringIndexOutOfBoundsException();
     int len = end - start;
     if (len > 0) {
+        // 复制了之后数组后也许会多出重复的数据，但由于count的限制，外部无法读取这些数据，因此可以当成不存在
         System.arraycopy(value, start+len, value, start, count-end);//从下标为start(包括)删除到下标为end(不包括)
         count -= len;
     }
     return this;
 }
-
 
 
 public AbstractStringBuilder deleteCharAt(int index) {
@@ -357,7 +373,7 @@ public AbstractStringBuilder deleteCharAt(int index) {
 }
 ```
 
-### 10. 字符串替换
+#### 字符串替换 replace
 ```java
 /**
 * 下标start(包括)至end(不包括)替换为str
@@ -383,33 +399,36 @@ public AbstractStringBuilder replace(int start, int end, String str) {
 }
 ```
 
-### 11. subString()
+#### 字符串截取 substring
 ```java
+// 包括start下标处的字符
 public String substring(int start) {
     return substring(start, count);
 }
 
+// 
 public CharSequence subSequence(int start, int end) {
     return substring(start, end);
 }
 
-
 /**
 * char数组截取
-* start下标（包括） 至 end下标（不包括）
+* start下标（包括） 至 end下标（不包括） 
 */
 public String substring(int start, int end) {
     if (start < 0)
         throw new StringIndexOutOfBoundsException(start);
     if (end > count)
+        // end超出的话会报越界错误
         throw new StringIndexOutOfBoundsException(end);
     if (start > end)
         throw new StringIndexOutOfBoundsException(end - start);
-    return new String(value, start, end - start);//构造函数中调用Arrays.copyOfRange([))进行数组截取
+    return new String(value, start, end - start);//构造函数中调用Arrays.copyOfRange())进行数组截取
+    // 最后相当于调用了System.arraycopy(value, start, 新数组, 0, end-start)
 }
 ```
 
-### 12. insert()
+#### 插入字符 insert
 ```java
 //普通对象插入
 public AbstractStringBuilder insert(int offset, Object obj) {
@@ -426,13 +445,13 @@ public AbstractStringBuilder insert(int offset, String str) {
     int len = str.length();
     ensureCapacityInternal(count + len);//数组扩容len长度
     System.arraycopy(value, offset, value, offset + len, count - offset);//从下标offset处起（包括）将后部char数组后移至len格
-    str.getChars(value, offset);//从offset处起（包括）将str内的char数组复制入value数组内
+    str.getChars(value, offset);//将str内的整个char数组复制入value数组内, 存放位置从下标offset处起（包括）
     count += len;//实际字符数增加
     return this;
 }
 
 
-//value数组在下标index出（包括）插入str数组从offset位置起（包括）len长度的字符
+//value数组在下标index字符之前插入str数组从offset下标起（包括）len长度的字符
 public AbstractStringBuilder insert(int index, char[] str, int offset,int len)
 {
     if ((index < 0) || (index > length()))
@@ -448,6 +467,7 @@ public AbstractStringBuilder insert(int index, char[] str, int offset,int len)
     return this;
 }
 
+
 //value从下标offset处起（包括）插入字符数组str
 public AbstractStringBuilder insert(int offset, char[] str) {
     if ((offset < 0) || (offset > length()))
@@ -455,6 +475,7 @@ public AbstractStringBuilder insert(int offset, char[] str) {
     int len = str.length;
     ensureCapacityInternal(count + len);
     System.arraycopy(value, offset, value, offset + len, count - offset);
+    // 复制str数组入value数组内
     System.arraycopy(str, 0, value, offset, len);
     count += len;
     return this;
@@ -509,11 +530,11 @@ public AbstractStringBuilder insert(int offset, int i) {
     return insert(offset, String.valueOf(i));
 }
 
-//省略基础数据类型的插入，类比Object
+//省略基础数据类型的插入，类比插入int类型
 ```
 
 
-### 13. indexOf()
+#### 字符位置获取 indexOf()/lastIndexOf()
 ```java
 // 获取子串顺序下首次出现的位置
 public int indexOf(String str) {
@@ -537,16 +558,17 @@ public int lastIndexOf(String str, int fromIndex) {
 ```
 
 
-### 14. reverse()
-字符数组倒序排列
+#### 字符数组倒序排列 reverse()
+
 ```java
 public AbstractStringBuilder reverse() {
     boolean hasSurrogates = false;
-    int n = count - 1;
+    int n = count - 1;// 最大下标
     // 折半交换
     // 如果存在奇数个字符，则跳过中间字符
+    //巧妙的循环方式 
     for (int j = (n-1) >> 1; j >= 0; j--) {
-        int k = n - j; //巧妙的循环方式
+        int k = n - j; 
         char cj = value[j];
         char ck = value[k];
         value[j] = ck;

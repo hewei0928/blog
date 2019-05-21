@@ -1,10 +1,10 @@
 ﻿---
 title: JDK源码学习系列01----String
-date: 2017-12-11 13:02:31
+date: 2017-11-20 13:02:31
 tags: 
    - Java 
-   - JDK源码
-
+   - JDK
+   - String
 ---
 
 >## 写在最前面
@@ -22,7 +22,7 @@ public final class String
 
 `String` 是`final`修饰的类，不可以被继承，可以被序列化，实现了`Comparable`, `CharSequence`接口
 
-## 1. 成员变量
+## 成员变量
 ```java
 private final char value[];//final修饰， 说明String不可变
 private int hash; 
@@ -32,16 +32,16 @@ private static final ObjectStreamField[] serialPersistentFields = new ObjectStre
 
 `String`是以字符数组的形式实现的，有`final`关键字修饰，说明字符串一旦初始化就不可修改。这也是与其与`StringBuffer`和`StringBuilder`的区别。`hash`则用来存放计算后的哈希值。
 
-## 2. 构造函数
-### (1). 无参构造 
+## 构造函数
+### 无参构造 
 ```java
 public String() {
     this.value = "".value;
 }
 ```
-构造一个0字符的字符串，由于String是不可变的，没什么大用
+构造一个长度为0的字符串，由于String是不可变的，没什么大用。但是`String s =""`和`String s2 == new String()`有显著区别：前者对象存储在常量池，后者存储在堆中。因此是`s == s2`返回`false`
 
-### (2). String参数
+### String参数
 ```java
 public String(String original) {
     this.value = original.value;
@@ -49,13 +49,13 @@ public String(String original) {
 }
 ```
 
-### (3). char[]参数
+### char[]参数
 ```java
 public String(char value[]) {
     this.value = Arrays.copyOf(value, value.length);//复制， 也解释了this.value无法修改，而value可以改变的矛盾
 }
 ```
-`Arrays.copyOf`方法中新建了一个`char`数组，并将`value`中的值复制入新建的数组中，返回对新建数组的引用，`this.value`指向这个新建的数组
+`Arrays.copyOf`方法中新建了一个`char`数组，并将`value`中的值复制入新建的数组中，返回对新建数组的引用，`this.value`指向这个新建的数组。参数数组改变时字符串不会变化。
 
 
 ```java
@@ -77,12 +77,12 @@ public String(char value[], int offset, int count) {
     if (offset > value.length - count) {
         throw new StringIndexOutOfBoundsException(offset + count);
     }
-    this.value = Arrays.copyOfRange(value, offset, offset+count);
+    this.value = Arrays.copyOfRange(value, offset, offset+count);//利用Arrays.copyOfRange返回新数组对象
 }
 ```
 同上，调用`Arrays.copyOfRange`新建了一个`char`数组，进行对`value`进行截取复制。传回引用至`this.value`。
 
-### (3). byte[]
+### byte[]
 ```java
 public String(byte bytes[], int offset, int length) {
     checkBounds(bytes, offset, length);
@@ -94,7 +94,7 @@ public String(byte bytes[]) {
 }
 ```
 
-### (4). StringBuilder和StringBuffer参数
+### StringBuilder和StringBuffer参数
 ```java
 public String(StringBuffer buffer) {
     synchronized(buffer) {
@@ -109,22 +109,22 @@ public String(StringBuilder builder) {
 原理类似于`char[]`参数的构造函数
 
 
-## 3. 重要方法
-### (1). length()
+## 重要方法
+### length
 ```java
 public int length() {
     return value.length;
 }
 ```
 获取字符串中包含的字符数， 即字符数组的长度
-### (2). isEmpty
+### isEmpty
 ```java
 public boolean isEmpty() {
     return value.length == 0;
 }
 ```
 判断字符串是否为空，即判断value数组的长度为0即可 
-### (3). charAt()
+### charAt
 ```java
 public char charAt(int index) {
     if ((index < 0) || (index >= value.length)) {
@@ -133,9 +133,38 @@ public char charAt(int index) {
     return value[index];
 }
 ```
-返回`index`下标指向的字符
+返回数组`index`下标处的字符
 
-### (4) getChars()
+### codePointAt、codePointBefore、 codePointRange 暂时还未理解
+```java
+public int codePointAt(int index) {
+    if ((index < 0) || (index >= value.length)) {
+        throw new StringIndexOutOfBoundsException(index);
+    }
+    return Character.codePointAtImpl(value, index, value.length);
+}
+
+
+public int codePointBefore(int index) {
+    int i = index - 1;
+    if ((i < 0) || (i >= value.length)) {
+        throw new StringIndexOutOfBoundsException(index);
+    }
+    return Character.codePointBeforeImpl(value, index, 0);
+}
+
+
+public int codePointCount(int beginIndex, int endIndex) {
+    if (beginIndex < 0 || endIndex > value.length || beginIndex > endIndex) {
+        throw new IndexOutOfBoundsException();
+    }
+    return Character.codePointCountImpl(value, beginIndex, endIndex - beginIndex);
+}
+```
+
+
+
+### getChars
 ```java
 //str.getChars()调用此方法将str的字符数组从dstBegin下标处起始复制到dst内
 void getChars(char dst[], int dstBegin) {
@@ -161,7 +190,7 @@ public void getChars(int srcBegin, int srcEnd, char dst[], int dstBegin) {
 }
 ```
 
-### (5). getBytes()
+### getBytes
 ```java
 //根据指定的decode编码返回某字符串在该编码下的byte数组表示
 public byte[] getBytes(String charsetName)
@@ -176,7 +205,7 @@ public byte[] getBytes() {
 }
 ```
 
-### (6). equals()
+### equals、contentEquals 
 ```java
 public boolean equals(Object anObject) {
     if (this == anObject) {
@@ -204,20 +233,22 @@ public boolean equals(Object anObject) {
 
 public boolean equalsIgnoreCase(String anotherString) {
     return (this == anotherString) ? true
-            : (anotherString != null)
+            : (anotherString != null)// 调用的String对象一定不为null
             && (anotherString.value.length == value.length)
-            && regionMatches(true, 0, anotherString, 0, value.length);
+            && regionMatches(true, 0, anotherString, 0, value.length);// 循环比较每个字符toLowerCase,toUpperCase
 }
 ```
 `String`类的equals方法首先比较两个字符串是否为同一个对象，为否的话继续遍历比较两个字符串对象内的`char`数组是否完全相同。
 
+
 ```java
 public boolean contentEquals(StringBuffer sb) {
-    return contentEquals((CharSequence)sb);
+    return contentEquals((CharSequence)sb);// 向上转型
 }
 
 public boolean contentEquals(CharSequence cs) {
     // Argument is a StringBuffer, StringBuilder
+    // StringBuilder StringBuffer比较
     if (cs instanceof AbstractStringBuilder) {
         if (cs instanceof StringBuffer) {
             synchronized(cs) {
@@ -261,8 +292,9 @@ private boolean nonSyncContentEquals(AbstractStringBuilder sb) {
     return true;
 }
 ```
+`contentEquals` 效果与`equals`类似， 不过`equals`参数为`String`而`contentEquals`参数为`CharSequence`及其子类如`CharBuffer`, `Segment`, `String`, `StringBuffer`, `StringBuilder`
 
-### (7). ComapreTo()
+### comapreTo
 ```java
 public int compareTo(String anotherString) {
     int len1 = value.length;
@@ -284,7 +316,7 @@ public int compareTo(String anotherString) {
 }
 
 ```
-比较两个字符串的大小，顺序遍历两个字符串的`char`数组，如果有不相等的字符，则返回结果。否则则比较两个字符串的长度。
+比较两个字符串的大小，先顺序遍历两个字符串的`char`数组，如果有不相等的字符，则返回结果。否则则比较两个字符串的长度。
 
 大小写不敏感的比较
 ```java
@@ -327,7 +359,7 @@ public int compareToIgnoreCase(String str) {
 }
 ```
 
-比较两个字符是否大小写不敏感的相等需要`toUpperCase`,`toLowerCase`同时相等
+**比较两个字符是否大小写不敏感的相等需要`toUpperCase`,`toLowerCase`同时相等。例如下例两个不相等的字符`toUpperCase`，`toLowerCase`的比较结果可能不一致**
 ```java
 char ch1 = (char) 73; //LATIN CAPITAL LETTER I
 char ch2 = (char) 304; //LATIN CAPITAL LETTER I WITH DOT ABOVE
@@ -342,7 +374,7 @@ false
 true
 ```
 
-### (8) regionMatches()
+### regionMatches
 比较两个字符串中指定区域的子串是否相等
 ```java
 //toffset和ooffset分别指出当前字符串中的子串起始位置和要与之比较的字符串中的子串起始地址；len 指出比较长度。
@@ -417,7 +449,7 @@ s1.regionMatches（0，s2，6，7）;
 s1.regionMatches（true，0，s2，6，7);
 ```
 
-### (9) startWith(), endWith()
+### startWith、 endWith
 ```java
 public boolean startsWith(String prefix) {
     return startsWith(prefix, 0);
@@ -427,6 +459,7 @@ public boolean endsWith(String suffix) {
     return startsWith(suffix, value.length - suffix.value.length);
 }
 
+// 字符串数组偏移toffset位后是否以prefix开头
 public boolean startsWith(String prefix, int toffset) {
     char ta[] = value;
     int to = toffset;
@@ -437,6 +470,7 @@ public boolean startsWith(String prefix, int toffset) {
     if ((toffset < 0) || (toffset > value.length - pc)) {
         return false;
     }
+    // 从偏移处开始循环，循环prefix.value.length次
     while (--pc >= 0) {
         if (ta[to++] != pa[po++]) {
             return false;
@@ -446,10 +480,11 @@ public boolean startsWith(String prefix, int toffset) {
 }
 ```
 
-### (10). hashCode()
+### hashCode
 ```java
 public int hashCode() {
     int h = hash;//默认值为0
+    //同一对象重复调用hashCode方法，这段代码只会运行一次
     if (h == 0 && value.length > 0) {
         char val[] = value;
 
@@ -465,7 +500,7 @@ public int hashCode() {
 hash = s[0]*31^(n-1) + s[1]*31^(n-2) + ... + s[n-1]
 以31为权是因为31是一个奇质数，所以31*i=32*i-i=(i5)-i，这种位移与减法结合的计算相比一般的运算快很多。
 
-### (11). indexOf()
+### indexOf
 ```java
 public int indexOf(int ch, int fromIndex) {
     final int max = value.length;
@@ -492,8 +527,17 @@ public int indexOf(int ch, int fromIndex) {
 public int indexOf(int ch) {
     return indexOf(ch, 0);
 }
+
+//返回字符串首次出现的下标，无符合的则返回-1
+public int indexOf(String str) {
+    return indexOf(str, 0);
+}
+
+public int indexOf(String str, int fromIndex) {
+    return String.indexOf(value, 0, count, str, fromIndex);
+}
 ```
-### (12). subString()
+### subString
 ```java
 public String substring(int beginIndex) {
     if (beginIndex < 0) {
@@ -521,17 +565,18 @@ public String substring(int beginIndex, int endIndex) {
     if (subLen < 0) {
         throw new StringIndexOutOfBoundsException(subLen);
     }
+    //当需要截取整个字符串时返回this,不会创建新对象
     return ((beginIndex == 0) && (endIndex == value.length)) ? this
             : new String(value, beginIndex, subLen);
 }
 
-
+//返回结果可以直接向下转型为String
 public CharSequence subSequence(int beginIndex, int endIndex) {
     return this.substring(beginIndex, endIndex);
 }
 ```
 
-### (13). concat()
+### concat
 ```java
 public String concat(String str) {
     int otherLen = str.length();
@@ -539,15 +584,20 @@ public String concat(String str) {
         return this;
     }
     int len = value.length;
-    //将value数组复制入新数组内，新数组的长度为value.length和len + otherLen的较小值。
+    //将value数组复制入新数组内，新数组的长度len + otherLen
     char buf[] = Arrays.copyOf(value, len + otherLen);
-    str.getChars(buf, len);//将str中的char数组复制到buf中，下标从len开始；
+    //将str中的char数组复制到buf中，下标从len开始；
+    str.getChars(buf, len);
     return new String(buf, true);
 }
-```
-分析以上代码可知`concat`方法的作用为在字符串后拼接字符串。
 
-### (14) replace()
+void getChars(char dst[], int dstBegin) {
+    System.arraycopy(value, 0, dst, dstBegin, value.length);
+}
+```
+分析以上代码可知`concat`方法的作用为在字符串后拼接字符串，返回的字符串及字符串数组为新对象
+
+### replace
 
 该`replace`方法参数是`char`,源码思路是找到第一个出现的oldChar，如果oldChar的下标小于len的下标，把oldChar前面的存到临时变量buf中，把oldChar后面的所有oldChar都变为newChar.
 ```java
@@ -570,8 +620,8 @@ public String replace(char oldChar, char newChar) {
             }
             //遍历要替换字符首次出现的下标到结尾，替换并复制入新char数组
             while (i < len) {
-                char c = val[i];
-                buf[i] = (c == oldChar) ? newChar : c;
+                char c = val[i];// 将原char赋值入新数组
+                buf[i] = (c == oldChar) ? newChar : c;//替换目标字符
                 i++;
             }
             return new String(buf, true);
@@ -606,7 +656,7 @@ public boolean matches(String regex) {
 }
 ```
 
-### (15) split()
+### split
 ```java
 public String[] split(String regex) {
     return split(regex, 0);
@@ -679,7 +729,8 @@ if (((regex.value.length == 1 &&
     (ch < Character.MIN_HIGH_SURROGATE ||
      ch > Character.MAX_LOW_SURROGATE))
 ```
-- 1. 
+
+1. 
 ```java
 ((regex.value.length == 1 &&
          ".$|()[{^?*+\\".indexOf(ch = regex.charAt(0)) == -1) ||
@@ -692,8 +743,8 @@ if (((regex.value.length == 1 &&
     1. regex只有一位，且不为列出的特殊字符；
     2. regex有两位，第一位为转义字符且第二个字符为非ASCII码字母或非ASCII码数字
     以上两条至少一条为true
-    
-- 2 
+
+2. 
 ```java
 (ch < Character.MIN_HIGH_SURROGATE ||
  ch > Character.MAX_LOW_SURROGATE)
@@ -701,8 +752,65 @@ if (((regex.value.length == 1 &&
 regex参数超过2个字符并且为合法的正则表达式 ?????
 
 
+### contains
+```java
+public boolean contains(CharSequence s) {
+    return indexOf(s.toString()) > -1;
+}
 
-### （15） trim()
+public int indexOf(String str) {
+    return indexOf(str, 0);
+}
+
+public int indexOf(String str, int fromIndex) {
+    return indexOf(value, 0, value.length,
+            str.value, 0, str.value.length, fromIndex);
+}
+
+// 在source数组指定范围内查找target数组的指定范围
+//source源数组，sourceOffset数组查找偏移下标，sourceCount源数组长度
+//target要查找数组，targetOffset查找数组偏移下标，  targetCount查找数组长度
+static int indexOf(char[] source, int sourceOffset, int sourceCount,
+        char[] target, int targetOffset, int targetCount,
+        int fromIndex) {
+    if (fromIndex >= sourceCount) {
+        return (targetCount == 0 ? sourceCount : -1);
+    }
+    if (fromIndex < 0) {
+        fromIndex = 0;
+    }
+    if (targetCount == 0) {
+        return fromIndex;
+    }
+
+    char first = target[targetOffset];
+    int max = sourceOffset + (sourceCount - targetCount);
+
+    for (int i = sourceOffset + fromIndex; i <= max; i++) {
+        /* Look for first character. */
+        if (source[i] != first) {
+            while (++i <= max && source[i] != first);
+        }
+
+        /* Found first character, now look at the rest of v2 */
+        if (i <= max) {
+            int j = i + 1;
+            int end = j + targetCount - 1;
+            for (int k = targetOffset + 1; j < end && source[j]
+                    == target[k]; j++, k++);
+
+            if (j == end) {
+                /* Found whole string. */
+                return i - sourceOffset;
+            }
+        }
+    }
+    return -1;
+}
+```
+判断字符串内是否存在某字符串片段
+
+### trim
 ```java
 public String trim() {
     int len = value.length;
@@ -719,11 +827,127 @@ public String trim() {
 }
 ```
 这个trim()是去掉首尾的空格，而实现方式也非常简单，分别找到第一个非空格字符的下标，与最后一个非空格字符的下标
-然后返回之间的子字符串。注意这里由于应用了substring方法，所以len变量的控制要小心
+然后返回之间的子字符串。首位均未出现空格时返回原字符串对象
+
+## 不可变String
+&ensp;&ensp;`String`对象是不可变的。根据`String`源码，类中每一个看似会修改`String`值的方法，实际上都是创建了一个新的`String`对象，而最初的`String`对象丝毫未动：
+```java
+public static void main(String[] args) {
+    String a = new String("aaaaa");
+    String b = a.toUpperCase();
+    System.out.println(a);
+}
+```
+
+
+## 重载“+” 与 StringBuilder
+
+### 重载“+”
+&ensp;&ensp;“+”在用于`String`类时，会被赋予特殊的含义。
+```java
+public static void main(String[] args) {
+    String a = "aaa";
+    String b = "bbb";
+    String c = a + b;
+}
+```
+利用**javap -c**命令反编译上述代码的class文件，得到以下结果：
+![微信截图_20180523103952.png-56.2kB][1]
+
+可以看到生成变量c时，首先生成了一个`StringBuilder`类型变量，然后调用了两次`append`方法，在用`toString`方法返回`String`对象。只有当拼接语句中出现存储在堆中的对象时编译器才会对“+”进行重载，如果拼接语句中出现的对象全部存储在常量池，则编译器会直接对其拼接，并将结果存入常量池：
+```java
+public static void main(String[] args) {
+    String a = "aaa";
+    Integer b = 1;
+    String c = "a" + "b";
+    String d = "a" + a;
+    String e = "a" + 1;
+    String f = "a" + b;
+}
+```
+
+反编译后结果如下：
+
+![微信截图_20180523110522.png-78.6kB][2]
+
+`String c = "a" + "b"`和`String e = "a" + 1`分别对应`String ab`和`String a1` 字符串直接在常量池中相加，所得的字符串也存储在常量池中。因此如果运行
+```java
+String g = "a" + "b";
+String h = "a" + 1;
+System.out.println(c == g);
+System.out.println(h == e);
+```
+返回的结果都是`true`。g,c,e,h都指向存储在常量池中。
+
+`String d = "a" + a`和`String f = "a" + b`则对“+”进行了重载。生成新`String`变量存储在堆中。因此如果运行：
+```java
+String i = "a" + a;
+String j = "a" + b;
+System.out.println(d == i);//false
+System.out.println(f == j);//false
+```
+
+### StringBuilder的使用
+这个现象让我明白以前对的字符串拼接操作的缺陷。例如
+```java
+public String a(String[] strings){
+    String result = "";
+    for (String s : strings) {
+        result += s;
+    }
+    return result;
+}
+
+public String b(String[] strings){
+    StringBuilder result = new StringBuilder();
+    for (String s : strings) {
+        result.append(s);
+    }
+    return result.toString();
+}
+```
+对这两行代码进行反编译：
+![image_1ce5n3fnuifh1tg61dap11fd12tps.png-76.4kB][3]
+![image_1ce5n3vvvc8v2likg0fnh20t19.png-66.8kB][4]
+可以发现a方法的循环体中，每循环一次都会创建一个`StringBuilder`对象。这对于内存是一种浪费。因此当使用循环去拼接字符串时，最好先创建`StringBuilder`对象，然后使用`append`去实现字符串拼接。
+
+### toString方法中的递归
+
+```java
+public class InfiniteResoursion {
+
+    @Override
+    public String toString() {
+        return "内存地址为" + this;
+    }
+
+    public static void main(String[] args) {
+        List<InfiniteResoursion> infiniteResoursions = new ArrayList<>();
+
+        for(int i = 0; i < 10; i++){
+            infiniteResoursions.add(new InfiniteResoursion());
+        }
+
+        System.out.println(infiniteResoursions);
+    }
+}
+```
+`InfiniteResoursion`的`toString`方法看似是打印出对象的内存地址，但是当实际运行时，却会报`java.lang.StackOverflowError`。这是因为当运行`"内存地址为" + this`时，编译器会自动调用`this.toString`将`this`转换为字符串，于是就发生了递归。如果真的想打印内存地址，则要调用`Object.toString`：
+```
+@Override
+public String toString() {
+    return "内存地址为" + super.toString();
+}
+```
+
+  [1]: http://static.zybuluo.com/hewei0928/pq31gchv5my2qh6wzdrcxck5/%E5%BE%AE%E4%BF%A1%E6%88%AA%E5%9B%BE_20180523103952.png
+  [2]: http://static.zybuluo.com/hewei0928/h3o8fx6mv8n3ub3g417vcnjw/%E5%BE%AE%E4%BF%A1%E6%88%AA%E5%9B%BE_20180523110522.png
+  [3]: http://static.zybuluo.com/hewei0928/8g79bcgzds9lj8olwswk9akp/image_1ce5n3fnuifh1tg61dap11fd12tps.png
+  [4]: http://static.zybuluo.com/hewei0928/95js4b98a1ggesb413hkbzxu/image_1ce5n3vvvc8v2likg0fnh20t19.png
 
 ## 总结
 
-&ensp;&ensp;源码阅读系列博文第一篇，跟了一遍String源码，但是却并不尽兴，对于内存层面的理解却远没有到位。所以还得继续努力。
+&ensp;&ensp;源码阅读系列博文第一篇，跟了一遍String源码，但是却并不尽兴，对于内存层面的理解远没有到位。所以还得继续努力。
 
 &ensp;&ensp;既然选择远方，便只顾风雨兼程。不忘初心，方得始终。
 
